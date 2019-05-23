@@ -3,6 +3,9 @@ import threading
 import time
 import numpy as np
 
+#import custom module for Graphical Interface
+#from modules import GUI
+
 #libs required for face emotion recognition
 import cognitive_face as CF
 import requests
@@ -114,6 +117,7 @@ def heart_thread():
     
     #monitor emotions
     while True:
+        sleep(1)
         count = 0
         sample = 0
         old_sample = sample
@@ -148,7 +152,7 @@ def heart_thread():
 
 #VISO THREAD
 def viso_thread():
-    KEY = '259c231550944ccbac666e1592deff23'
+    KEY = '22ba697bd23945c0918d7cbfebf70533'
     CF.Key.set(KEY)
     BASE_URL = 'https://westeurope.api.cognitive.microsoft.com/face/v1.0/'
     CF.BaseUrl.set(BASE_URL)
@@ -211,6 +215,7 @@ def audio_thread():
     
     i = 0;
     while (True):
+        sleep(1)
         # create pyaudio stream
         i = i+1
         wav_output_filename = '../sounds/test' + str(i) + '.wav' # name of .wav file
@@ -284,18 +289,266 @@ def audio_thread():
         voice.destroy()
 
 
-try:
-    _thread.start_new_thread(heart_thread, ())
-    calibration_mutex.acquire()
-    calibration_mutex.acquire()
-    print("[MAIN] Starting viso and audio threads")
-    _thread.start_new_thread(viso_thread, ())
-    _thread.start_new_thread(audio_thread, ())
-except:
-    print("[ERROR] unable to start thread")
+
+#GUI MANAGING
+
+import tkinter as tk
+
+labels = ["fear", "happiness", "neutral", "contempt", "surprise", "sadness", "anger", "disgust"]
+
+def create_window(window, title, emotions_canvas, emotion_status):
+    #setup window
+    window = tk.Tk()
+    window.geometry("800x100")
+    window.title(title)
+    window.configure(background="white")
+    window.resizable(False, False)
+
+    for i in range(0, 8):
+        emotion_label = tk.Label(window, text=labels[i], font=("helvetica", 20))
+        emotion_label.grid(row = 0, column = i)
+
+        emotions_canvas[i] = tk.Canvas(window, width=50, height=50)
+        emotions_canvas[i].grid(row = 1, column = i)
+
+        if emotion_status[i] == 1:
+            emotions_canvas[i].create_oval(10, 10, 40, 40, width=3, fill="green")
+        else:
+            emotions_canvas[i].create_oval(10, 10, 40, 40, width=3)
+            
+
+def update_window(window, emotions_canvas, emotion_status):
+    for i in range(0, 8):
+        if emotion_status[i] == 1:
+            emotions_canvas[i].create_oval(10, 10, 40, 40, width=3, fill="green")
+        else:
+            emotions_canvas[i].create_oval(10, 10, 40, 40, width=3, fill="white")
+
+def update_gui():
+    print("callback")
+    try:
+        data = gui_queue.get(timeout=0.1)
+        print("update gui: ", data)
+        
+        audio_status = [0, 0, 0, 0, 0, 0, 0, 0]
+        if data['audio'][np.argmax(data['audio'])] != 0:
+            audio_status[np.argmax(data['audio'])] = 1
+        print("audio status: ", audio_status)
+        update_window(audio_window, audio_canvas, audio_status)
+        
+        video_status = [0, 0, 0, 0, 0, 0, 0, 0]
+        if data['video'][np.argmax(data['video'])] != 0:
+            video_status[np.argmax(data['video'])] = 1
+        update_window(video_window, video_canvas, video_status)
+            
+        heart_status = [0, 0, 0, 0, 0, 0, 0, 0]
+        if data['heart'][np.argmax(data['heart'])] != 0:
+            heart_status[np.argmax(data['heart'])] = 1
+        update_window(heart_window, heart_canvas, heart_status)
+        
+        global_status = [0, 0, 0, 0, 0, 0, 0, 0]
+        if data['global'][np.argmax(data['global'])] != 0:
+            global_status[np.argmax(data['global'])] = 1
+        update_window(global_window, global_canvas, global_status)
+    except:
+        #print("exception in callback")
+        pass
     
+    #global_window.event_generate("<<globalUpdateEvent>>")
+    global_window.after(300, update_gui)
+
+audio_window = None
+audio_canvas = [None, None, None, None, None, None, None, None]
+audio_status = [0, 0, 0, 0, 0, 0, 0, 0]
+#-----
+
+audio_window = tk.Tk()
+audio_window.geometry("650x100")
+audio_window.title("Audio emotion recognition")
+audio_window.configure(background="white")
+audio_window.resizable(False, False)
+
+for i in range(0, 8):
+    emotion_label = tk.Label(audio_window, text=labels[i], font=("helvetica", 20))
+    emotion_label.grid(row = 0, column = i)
+
+    audio_canvas[i] = tk.Canvas(audio_window, width=50, height=50)
+    audio_canvas[i].grid(row = 1, column = i)
+
+    if audio_status[i] == 1:
+        audio_canvas[i].create_oval(10, 10, 40, 40, width=3, fill="green")
+    else:
+        audio_canvas[i].create_oval(10, 10, 40, 40, width=3)
+
+#audio_window.bind("<<audioUpdateEvent>>", update_gui)
+#-----
+
+
+#create_window(audio_window, "audio emotion recognition", audio_canvas, audio_status)
+
+video_window = None
+video_canvas = [None, None, None, None, None, None, None, None]
+video_status = [0, 0, 0, 0, 0, 0, 0, 0]
+
+#-----
+
+video_window = tk.Tk()
+video_window.geometry("650x100")
+video_window.title("Video emotion recognition")
+video_window.configure(background="white")
+video_window.resizable(False, False)
+
+for i in range(0, 8):
+    emotion_label = tk.Label(video_window, text=labels[i], font=("helvetica", 20))
+    emotion_label.grid(row = 0, column = i)
+
+    video_canvas[i] = tk.Canvas(video_window, width=50, height=50)
+    video_canvas[i].grid(row = 1, column = i)
+
+    if video_status[i] == 1:
+        video_canvas[i].create_oval(10, 10, 40, 40, width=3, fill="green")
+    else:
+        video_canvas[i].create_oval(10, 10, 40, 40, width=3)
+
+#video_window.bind("<<videoUpdateEvent>>", update_gui)
+#-----
+
+#create_window(video_window, "video emotion recognition", video_canvas, video_status)
+
+heart_window = None
+heart_canvas = [None, None, None, None, None, None, None, None]
+heart_status = [0, 0, 0, 0, 0, 0, 0, 0]
+
+#-----
+
+heart_window = tk.Tk()
+heart_window.geometry("650x100")
+heart_window.title("Heart emotion recognition")
+heart_window.configure(background="white")
+heart_window.resizable(False, False)
+
+for i in range(0, 8):
+    emotion_label = tk.Label(heart_window, text=labels[i], font=("helvetica", 20))
+    emotion_label.grid(row = 0, column = i)
+
+    heart_canvas[i] = tk.Canvas(heart_window, width=50, height=50)
+    heart_canvas[i].grid(row = 1, column = i)
+
+    try:
+        if heart_status[i] == 1:
+            heart_canvas[i].create_oval(10, 10, 40, 40, width=3, fill="green")
+        else:
+            heart_canvas[i].create_oval(10, 10, 40, 40, width=3)  
+    except:
+        pass
+
+#heart_window.bind("<<heartUpdateEvent>>", update_gui)
+#-----
+#create_window(heart_window, "heart emotion recognition", heart_canvas, heart_status)
+
+global_window = None
+global_canvas = [None, None, None, None, None, None, None, None]
+global_status = [0, 0, 0, 0, 0, 0, 0, 0]
+#-----
+
+global_window = tk.Tk()
+global_window.geometry("650x100")
+global_window.title("Global emotion recognition")
+global_window.configure(background="white")
+global_window.resizable(False, False)
+
+for i in range(0, 8):
+    emotion_label = tk.Label(global_window, text=labels[i], font=("helvetica", 20))
+    emotion_label.grid(row = 0, column = i)
+
+    global_canvas[i] = tk.Canvas(global_window, width=50, height=50)
+    global_canvas[i].grid(row = 1, column = i)
+
+    if global_status[i] == 1:
+        global_canvas[i].create_oval(10, 10, 40, 40, width=3, fill="green")
+    else:
+        global_canvas[i].create_oval(10, 10, 40, 40, width=3, fill="white")
+
+#global_window.bind("<<globalUpdateEvent>>", update_gui)
+#-----
+#create_window(global_window, "Global emotion recognition", global_canvas, global_status)
+
+#END GUI MANAGING
+import queue
+gui_queue = queue.Queue()
+
+def global_thread():
+    try:
+        #_thread.start_new_thread(heart_thread, ())
+        #calibration_mutex.acquire()
+        
+        #wait end of calibration
+        #calibration_mutex.acquire()
+        print("[MAIN] Starting viso and audio threads")
+        #_thread.start_new_thread(viso_thread, ())
+        _thread.start_new_thread(audio_thread, ())
+    except:
+        print("[ERROR] unable to start thread")
+        
+    while True:
+        sleep(3)
+        #get a local copy of the last reading
+        heart_emotions_mutex.acquire()
+        heart = heart_emotions
+        heart_emotions_mutex.release()
+        viso_emotions_mutex.acquire()
+        video = viso_emotions
+        viso_emotions_mutex.release()
+        audio_emotions_mutex.acquire()
+        audio = audio_emotions
+        audio_emotions_mutex.release()
+        
+        
+        avg_emotions = np.multiply(video, 0.6) + np.multiply(heart, 0.3) + np.multiply(audio, 0.1)
+        print("[MAIN] avg prediction: ", avg_emotions)
+        max_emotion = np.argmax(avg_emotions)
+        if avg_emotions[max_emotion] == 0:
+            print("[MAIN] no emotion detected")
+        else:
+            print("[MAIN] the predicted emotion is: ", EMOTIONS[max_emotion])
+    
+        gui_queue.put({'audio': audio, 'video': video, 'heart': heart, 'global': avg_emotions})
+        
+        #update GUI
+        '''
+        audio_status = [0, 0, 0, 0, 0, 0, 0, 0]
+        audio_status[np.argmax(audio)] = 1
+        update_window(audio_window, audio_canvas, audio_status)
+        
+        video_status = [0, 0, 0, 0, 0, 0, 0, 0]
+        video_status[np.argmax(video)] = 1
+        update_window(video_window, video_canvas, video_status)
+            
+        heart_status = [0, 0, 0, 0, 0, 0, 0, 0]
+        heart_status[np.argmax(heart)] = 1
+        update_window(heart_window, heart_canvas, heart_status)
+        
+        global_status = [0, 0, 0, 0, 0, 0, 0, 0]
+        global_status[np.argmax(avg_emotions)] = 1
+        update_window(global_window, global_canvas, global_status)
+        '''
+
+
+
+try:
+    _thread.start_new_thread(global_thread, ())
+except:
+    print("Unable to start main thread")
+    exit()
+    
+global_window.after(300, update_gui)
+#global_window.event_generate("<<globalUpdateEvent>>")
+tk.mainloop()
+
+'''
 while True:
-    sleep(3)
+    #sleep(3)
+    
     #get a local copy of the last reading
     heart_emotions_mutex.acquire()
     heart = heart_emotions
@@ -307,6 +560,7 @@ while True:
     audio = audio_emotions
     audio_emotions_mutex.release()
     
+    
     avg_emotions = np.multiply(video, 0.6) + np.multiply(heart, 0.3) + np.multiply(audio, 0.1)
     print("[MAIN] avg prediction: ", avg_emotions)
     max_emotion = np.argmax(avg_emotions)
@@ -314,3 +568,22 @@ while True:
         print("[MAIN] no emotion detected")
     else:
         print("[MAIN] the predicted emotion is: ", EMOTIONS[max_emotion])
+    
+    
+    #update GUI
+    audio_status = [0, 0, 0, 0, 0, 0, 0, 0]
+    audio_status[np.argmax(audio)] = 1
+    update_window(audio_window, audio_canvas, audio_status)
+    
+    video_status = [0, 0, 0, 0, 0, 0, 0, 0]
+    video_status[np.argmax(video)] = 1
+    update_window(video_window, video_canvas, video_status)
+        
+    heart_status = [0, 0, 0, 0, 0, 0, 0, 0]
+    heart_status[np.argmax(heart)] = 1
+    update_window(heart_window, heart_canvas, heart_status)
+    
+    global_status = [0, 0, 0, 0, 0, 0, 0, 0]
+    global_status[np.argmax(avg_emotions)] = 1
+    update_window(global_window, global_canvas, global_status)
+    '''
