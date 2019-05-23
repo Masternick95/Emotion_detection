@@ -56,10 +56,10 @@ def evaluate_freq(bpm, avg_bpm):
     if (bpm < avg_bpm*0.93) & (bpm > avg_bpm*0.85):
         #emotions['sadness'] = 1
         emotions[_SADNESS] = 1
-    if (bpm > avg_bpm*1.28) & (bpm < avg_bpm*1.40):
+    if (bpm > avg_bpm*1.28) & (bpm < avg_bpm*1.35):
         #emotions['fear'] = 1
         emotions[_FEAR] = 1
-    if (bpm > avg_bpm*1.13) & (bpm < avg_bpm*1.28):
+    if (bpm > avg_bpm*1.35):
         #emotions['anger'] = 1
         emotions[_ANGER] = 1
     if (bpm > avg_bpm*1.07) & (bpm < avg_bpm*1.13):
@@ -145,8 +145,20 @@ def heart_thread():
             print('[HEART] response: ', emotions)
         
             heart_emotions_mutex.acquire()
-            heart_emotions = emotions #copy results in global variable
+            
+            heart_emotions[_FEAR] = emotions[_FEAR]
+            heart_emotions[_HAPPINESS] = emotions[_HAPPINESS]
+            heart_emotions[_NEUTRAL] = emotions[_NEUTRAL]
+            heart_emotions[_CONTEMPT] = emotions[_CONTEMPT]
+            heart_emotions[_SURPRISE] = emotions[_SURPRISE]
+            heart_emotions[_SADNESS] = emotions[_SADNESS]
+            heart_emotions[_ANGER] = emotions[_ANGER]
+            heart_emotions[_DISGUST] = emotions[_DISGUST]
+            
+            #copy results in global variable
             heart_emotions_mutex.release()
+            
+            print('[HEART] heart_emotions: ', heart_emotions)
         else:
             print("[HEART] error reading sensor")
 
@@ -161,6 +173,7 @@ def viso_thread():
     params = {'returnFaceAttributes': 'emotion'}
 
     camera = PiCamera()
+    camera.start_preview(fullscreen=False, window=(700, 100, 300, 400))
 
     while True:
         sleep(3)
@@ -318,44 +331,14 @@ def create_window(window, title, emotions_canvas, emotion_status):
             
 
 def update_window(window, emotions_canvas, emotion_status):
+
     for i in range(0, 8):
         if emotion_status[i] == 1:
             emotions_canvas[i].create_oval(10, 10, 40, 40, width=3, fill="green")
         else:
             emotions_canvas[i].create_oval(10, 10, 40, 40, width=3, fill="white")
 
-def update_gui():
-    print("callback")
-    try:
-        data = gui_queue.get(timeout=0.1)
-        print("update gui: ", data)
-        
-        audio_status = [0, 0, 0, 0, 0, 0, 0, 0]
-        if data['audio'][np.argmax(data['audio'])] != 0:
-            audio_status[np.argmax(data['audio'])] = 1
-        print("audio status: ", audio_status)
-        update_window(audio_window, audio_canvas, audio_status)
-        
-        video_status = [0, 0, 0, 0, 0, 0, 0, 0]
-        if data['video'][np.argmax(data['video'])] != 0:
-            video_status[np.argmax(data['video'])] = 1
-        update_window(video_window, video_canvas, video_status)
-            
-        heart_status = [0, 0, 0, 0, 0, 0, 0, 0]
-        if data['heart'][np.argmax(data['heart'])] != 0:
-            heart_status[np.argmax(data['heart'])] = 1
-        update_window(heart_window, heart_canvas, heart_status)
-        
-        global_status = [0, 0, 0, 0, 0, 0, 0, 0]
-        if data['global'][np.argmax(data['global'])] != 0:
-            global_status[np.argmax(data['global'])] = 1
-        update_window(global_window, global_canvas, global_status)
-    except:
-        #print("exception in callback")
-        pass
-    
-    #global_window.event_generate("<<globalUpdateEvent>>")
-    global_window.after(300, update_gui)
+
 
 audio_window = None
 audio_canvas = [None, None, None, None, None, None, None, None]
@@ -473,19 +456,49 @@ for i in range(0, 8):
 #-----
 #create_window(global_window, "Global emotion recognition", global_canvas, global_status)
 
+def update_gui():
+    try:
+        data = gui_queue.get(timeout=0.1)
+        
+        audio_status = [0, 0, 0, 0, 0, 0, 0, 0]
+        if data['audio'][np.argmax(data['audio'])] != 0:
+            audio_status[np.argmax(data['audio'])] = 1
+        update_window(audio_window, audio_canvas, audio_status)
+        
+        video_status = [0, 0, 0, 0, 0, 0, 0, 0]
+        if data['video'][np.argmax(data['video'])] != 0:
+            video_status[np.argmax(data['video'])] = 1
+        update_window(video_window, video_canvas, video_status)
+            
+        heart_status = data['heart']
+        print('[UPDATE GUI] data: ', data['heart'])
+        print('[UPDATE GUI] status: ', heart_status)
+        update_window(heart_window, heart_canvas, heart_status)
+        
+        global_status = [0, 0, 0, 0, 0, 0, 0, 0]
+        if data['global'][np.argmax(data['global'])] != 0:
+            global_status[np.argmax(data['global'])] = 1
+        update_window(global_window, global_canvas, global_status)
+    except:
+        #print("exception in callback")
+        pass
+    
+    #global_window.event_generate("<<globalUpdateEvent>>")
+    global_window.after(300, update_gui)
+
 #END GUI MANAGING
 import queue
 gui_queue = queue.Queue()
 
 def global_thread():
     try:
-        #_thread.start_new_thread(heart_thread, ())
-        #calibration_mutex.acquire()
+        _thread.start_new_thread(heart_thread, ())
+        calibration_mutex.acquire()
         
         #wait end of calibration
-        #calibration_mutex.acquire()
+        calibration_mutex.acquire()
         print("[MAIN] Starting viso and audio threads")
-        #_thread.start_new_thread(viso_thread, ())
+        _thread.start_new_thread(viso_thread, ())
         _thread.start_new_thread(audio_thread, ())
     except:
         print("[ERROR] unable to start thread")
@@ -502,7 +515,8 @@ def global_thread():
         audio_emotions_mutex.acquire()
         audio = audio_emotions
         audio_emotions_mutex.release()
-        
+        print("[MAIN] heart_emotions: ", heart_emotions)
+        print("[MAIN] heart: ", heart)
         
         avg_emotions = np.multiply(video, 0.6) + np.multiply(heart, 0.3) + np.multiply(audio, 0.1)
         print("[MAIN] avg prediction: ", avg_emotions)
@@ -511,7 +525,7 @@ def global_thread():
             print("[MAIN] no emotion detected")
         else:
             print("[MAIN] the predicted emotion is: ", EMOTIONS[max_emotion])
-    
+        
         gui_queue.put({'audio': audio, 'video': video, 'heart': heart, 'global': avg_emotions})
         
         #update GUI
